@@ -198,6 +198,9 @@ do_install() {
     fi
 
     pkg_install $pkg $root
+
+    mkdir -p $PKGS_DIR/${pkg}/current/.nopac
+    touch $PKGS_DIR/${pkg}/current/.nopac/installed
 }
 
 # $1 - package name
@@ -210,13 +213,12 @@ do_uninstall() {
     fi
 
     pkg_uninstall $pkg $root
+    rm -f $PKGS_DIR/${pkg}/current/.nopac/installed
 }
 
 do_query() {
     for pkg_dir in "$PKGS_DIR"/*; do
-	local links_num=$(find $PKGS_SYSROOT -lname $pkg_dir/current'*' | wc -l)
-
-        if [ $links_num -ne 0 ]; then
+        if [ -f $pkg_dir/current/.nopac/installed ]; then
             local ver=$(basename $(readlink -f $pkg_dir/current))
             local pkg=$(basename $pkg_dir)
             echo "$pkg  $ver"
