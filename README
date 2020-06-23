@@ -1,0 +1,19 @@
+nopac is a simple way to install and maintain a compiled package binaries
+to keep them separately from the system but create only links to the real files.
+This approach was inspired by GoboLinux.
+
+What it does ?
+==============
+- allows to easy track which files of which package are installed in the system
+  without using any special package db but simply create a link in / and point to the
+  real file
+
+- allows to have alternative compiled package's version and easy switch between
+  them by changing package's 'current' link to the alternative one. It should be
+  used only for same package's version but a bit modified to match same files
+  installed by the 'current' one
+
+What it does not ?
+==================
+- does not track the package's dependencies
+- does not use any external repo to download the package and its dependencies

@@ -1,0 +1,287 @@
+#!/bin/sh
+
+set -e
+
+VERSION="0.0.1"
+
+# FS design looks like:
+#
+# /store/packages/all/{pkg}/
+#                          0.0.1/
+#                               sysroot/
+#                          0.0.2/
+#                               sysroot/
+#                          current -> 0.0.2
+#
+# /bin/xxx -> /store/packages/all/xxx/current/sysroot/bin/xxx
+# /lib/libxxx.a -> /store/packages/all/xxx/current/sysroot/lib/libxxx.a
+
+PKG_CONFLICTS=""
+PKG_NAME=""
+PKG_VER=""
+
+DO_FORCE=n
+
+usage() {
+    echo "nopac - no-package manager v${VERSION}"
+    echo
+    echo "Manage packages in non-FHS way (per package directory)"
+    echo
+    echo "Usage: ${0} [options] [PKGNAME]"
+    echo
+    echo "Options:"
+    echo "-A,--add PATH         Copy package's files to store dir"
+    echo "-S,--install          Install/sync package to the system root"
+    echo "-R,--uninstall        Uninstall package from the system root"
+    echo "-Q,--query            Query packages info"
+    echo "-v,--ver VERSION      Specify the package version"
+    echo "-f                    Enforce the operation"
+    echo "-h,--help             Print help"
+    echo
+    echo "Add new package to the store:"
+    echo "    nopac -A PATH -v VERSION PKGNAME"
+    echo
+    echo "Install package of current version to the system from the store:"
+    echo "    nopac -S PKGNAME"
+    echo "Install package of specific version to the system from the store:"
+    echo "    nopac -S -v VERSION PKGNAME"
+    echo
+    echo "Uninstall package from the system root:"
+    echo "    nopac -R PKGNAME"
+    echo
+    echo "Query installed packages:"
+    echo "    nopac -Q"
+}
+
+do_prepare() {
+    local store_dir=~/store
+    local root_dir=~/sysroot
+
+    if [ $UID -eq 0 ]; then
+        store_dir=/store
+        root_dir=/
+    fi
+
+    PKGS_STORE_DIR=$(readlink -f $store_dir)
+    PKGS_DIR=${PKGS_STORE_DIR}/packages/all
+    PKGS_SYSROOT=$(readlink -f $root_dir)
+}
+
+check_opts() {
+    mkdir -p ${PKGS_DIR}
+}
+
+error() {
+    echo "error: ${1}"
+    exit 1
+}
+
+# $1 - path to the folder
+dir_is_empty() {
+    if [ -z "$(ls -A $1)" ]; then
+        return 0
+    fi
+
+    return 1
+}
+
+# $1 - package name
+# $2 - path to the packages files
+pkg_check_conflicts() {
+    local pkg=$1
+    local root=$PKGS_DIR/$pkg/current/sysroot
+
+    for i in "$2"/*; do
+        local rel=${i/$root/}
+        if [ -d "$i" ]; then
+            pkg_check_conflicts $pkg $i
+	elif [ -f "$i" ]; then
+	    if [ -f $PKGS_SYSROOT/$rel ]; then
+                PKG_CONFLICTS="${PKG_CONFLICTS}conflicts with: ${PKGS_SYSROOT}/${rel}\n"
+            fi
+	fi
+    done
+}
+
+# $1 - package name
+# $2 - path to the packages files
+pkg_install() {
+    local pkg=$1
+    local root=$PKGS_DIR/$pkg/current/sysroot
+
+    for i in "$2"/*; do
+        local rel=${i/$root/}
+        if [ -d "$i" ]; then
+            mkdir -pv $PKGS_SYSROOT/$rel
+            pkg_install $pkg $i
+	elif [ -f "$i" ]; then
+	    ln -sfv $i $PKGS_SYSROOT/$rel
+	fi
+    done
+}
+
+# $1 - package name
+# $2 - path to package's files
+pkg_uninstall() {
+    local pkg=$1
+    local root=$PKGS_DIR/$pkg/current/sysroot
+
+    for i in "$2"/*; do
+        local rel=${i/$root/}
+	local del=$PKGS_SYSROOT/$rel
+
+        if [ -d "$del" ]; then
+            pkg_uninstall $pkg $i
+
+            if dir_is_empty "$del"; then
+                rm -rf $del
+            fi
+	elif [ -f "$del" ]; then
+	    unlink $del
+	fi
+    done
+}
+
+# $1 - package name
+# $2 - package ver
+# $3 - package files dir
+do_add() {
+    local pkg=$1
+    local ver=$2
+    local dir=$3
+    local root=$PKGS_DIR/${pkg}/${ver}/sysroot
+
+    if [ -z "${pkg}" ]; then
+        error "package name was not specified"
+    fi
+    if [ -z "${ver}" ]; then
+        error "package version was not specified"
+    fi
+    if [ ! -d "${dir}" ]; then
+        error "package's dir [${dir}] does not exist"
+    fi
+
+    echo "Getting $pkg v$ver ..."
+
+    mkdir -p $root
+    rsync -av -delete ${dir}/* ${root}
+
+    if [ ! -e $PKGS_DIR/${pkg}/current ]; then
+        ln -sf ${ver} $PKGS_DIR/${pkg}/current
+    fi
+}
+
+# $1 - package name
+# $2 - package ver (optional)
+do_install() {
+    local pkg=$1
+    local ver=$2
+    local root=$PKGS_DIR/${pkg}/current/sysroot
+
+    if [ -z "${pkg}" ]; then
+        error "package name was not specified"
+    fi
+
+    if [ ! -z "${ver}" ]; then
+        ln -sf ${ver} $PKGS_DIR/${pkg}/current
+    fi
+
+    if [ "${DO_FORCE}" == "n" ]; then
+        PKG_CONFLICTS=""
+        pkg_check_conflicts $pkg $root
+
+        if [ ! -z "${PKG_CONFLICTS}" ]; then
+            echo -en ${PKG_CONFLICTS}
+            echo "error: $pkg: has conflicts with already installed files (use -f to ignore it)"
+	    exit 1
+        fi
+    fi
+
+    pkg_install $pkg $root
+}
+
+# $1 - package name
+do_uninstall() {
+    local pkg=$1
+    local root=$PKGS_DIR/${pkg}/current/sysroot
+
+    if [ -z "${pkg}" ]; then
+        error "package name was not specified"
+    fi
+
+    pkg_uninstall $pkg $root
+}
+
+do_query() {
+    for pkg_dir in "$PKGS_DIR"/*; do
+	local links_num=$(find $PKGS_SYSROOT -lname $pkg_dir/current'*' | wc -l)
+
+        if [ $links_num -ne 0 ]; then
+            local ver=$(basename $(readlink -f $pkg_dir/current))
+            local pkg=$(basename $pkg_dir)
+            echo "$pkg  $ver"
+        fi
+    done
+}
+
+do_prepare
+
+if [ $# -eq 0 ]; then
+    usage
+    exit 1
+fi
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    -A|--add)
+      DO_ADD=y
+      ADD_PATH=$2
+      shift
+      ;;
+    -S|--install)
+      DO_INSTALL=y
+      ;;
+    -R|--uninstall)
+      DO_UNINSTALL=y
+      ;;
+    -Q|--query)
+      DO_QUERY=y
+      ;;
+    -f|--force)
+      DO_FORCE=y
+      ;;
+    -v|--ver)
+      PKG_VER=$2
+      shift
+      ;;
+    -h|--help)
+      usage
+      exit
+      ;;
+    *)
+      PKG_NAME=$1
+  esac
+  shift
+done
+
+check_opts
+
+if [ "${DO_ADD}" == "y" ]; then
+    if do_add "${PKG_NAME}" "${PKG_VER}" "${ADD_PATH}"; then
+        exit 1
+    fi
+elif [ "${DO_INSTALL}" == "y" ]; then
+    if do_install "${PKG_NAME}" "${PKG_VER}"; then
+        exit 1
+    fi
+elif [ "${DO_UNINSTALL}" == "y" ]; then
+    if do_uninstall "${PKG_NAME}"; then
+        exit 1
+    fi
+elif [ "${DO_QUERY}" == "y" ]; then
+    if do_query "${PKG_NAME}"; then
+        exit 1
+    fi
+else
+    error "no command specified"
+fi
