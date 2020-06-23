@@ -21,6 +21,7 @@ PKG_NAME=""
 PKG_VER=""
 
 DO_FORCE=n
+DO_USER=n
 
 usage() {
     echo "nopac - no-package manager v${VERSION}"
@@ -36,6 +37,7 @@ usage() {
     echo "-Q,--query            Query packages info"
     echo "-v,--ver VERSION      Specify the package version"
     echo "-f,--force            Enforce the operation"
+    echo "-u, --user            Perform operations on user's local sysroot"
     echo "-h,--help             Print help"
     echo
     echo "Add new package to the store:"
@@ -54,12 +56,12 @@ usage() {
 }
 
 do_prepare() {
-    local store_dir=~/store
-    local root_dir=~/sysroot
+    local store_dir=/store
+    local root_dir=/
 
-    if [ $UID -eq 0 ]; then
-        store_dir=/store
-        root_dir=/
+    if [ "${DO_USER}" == "y" ]; then
+        store_dir=~/store
+        root_dir=~/sysroot
     fi
 
     PKGS_STORE_DIR=$(readlink -f $store_dir)
@@ -224,8 +226,6 @@ do_query() {
     done
 }
 
-do_prepare
-
 if [ $# -eq 0 ]; then
     usage
     exit 1
@@ -250,6 +250,9 @@ while [ $# -gt 0 ]; do
     -f|--force)
       DO_FORCE=y
       ;;
+    -u|--user)
+      DO_USER=y
+      ;;
     -v|--ver)
       PKG_VER=$2
       shift
@@ -263,6 +266,8 @@ while [ $# -gt 0 ]; do
   esac
   shift
 done
+
+do_prepare
 
 if [ "${DO_ADD}" == "y" ]; then
     if do_add "${PKG_NAME}" "${PKG_VER}" "${ADD_PATH}"; then
