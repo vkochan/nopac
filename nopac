@@ -35,7 +35,7 @@ usage() {
     echo "-R,--uninstall        Uninstall package from the system root"
     echo "-Q,--query            Query packages info"
     echo "-v,--ver VERSION      Specify the package version"
-    echo "-f                    Enforce the operation"
+    echo "-f,--force            Enforce the operation"
     echo "-h,--help             Print help"
     echo
     echo "Add new package to the store:"
