@@ -65,9 +65,7 @@ do_prepare() {
     PKGS_STORE_DIR=$(readlink -f $store_dir)
     PKGS_DIR=${PKGS_STORE_DIR}/packages/all
     PKGS_SYSROOT=$(readlink -f $root_dir)
-}
 
-check_opts() {
     mkdir -p ${PKGS_DIR}
 }
 
@@ -265,8 +263,6 @@ while [ $# -gt 0 ]; do
   esac
   shift
 done
-
-check_opts
 
 if [ "${DO_ADD}" == "y" ]; then
     if do_add "${PKG_NAME}" "${PKG_VER}" "${ADD_PATH}"; then
