@@ -38,10 +38,14 @@ usage() {
     echo "-v,--ver VERSION      Specify the package version"
     echo "-f,--force            Enforce the operation"
     echo "-u, --user            Perform operations on user's local sysroot"
+    echo "-s, --src             Add package sources"
     echo "-h,--help             Print help"
     echo
-    echo "Add new package to the store:"
+    echo "Add package with files to the store:"
     echo "    nopac -A PATH -v VERSION PKGNAME"
+    echo
+    echo "Add package with sources to the store:"
+    echo "    nopac -A PATH -s -v VERSION PKGNAME"
     echo
     echo "Install package of current version to the system from the store:"
     echo "    nopac -S PKGNAME"
@@ -150,6 +154,7 @@ do_add() {
     local ver=$2
     local dir=$3
     local root=$PKGS_DIR/${pkg}/${ver}/sysroot
+    local src=$PKGS_DIR/${pkg}/${ver}/source
 
     if [ -z "${pkg}" ]; then
         error "package name was not specified"
@@ -161,10 +166,16 @@ do_add() {
         error "package's dir [${dir}] does not exist"
     fi
 
-    echo "Getting $pkg v$ver ..."
+    echo "Adding $pkg $ver ..."
 
     mkdir -p $root
-    rsync -av -delete ${dir}/* ${root}
+
+    if [ "DO_ADD_SRC" == "y" ]; then
+        mkdir -p $src
+        rsync -av -delete ${dir}/* ${src}
+    else
+        rsync -av -delete ${dir}/* ${root}
+    fi
 
     if [ ! -e $PKGS_DIR/${pkg}/current ]; then
         ln -sf ${ver} $PKGS_DIR/${pkg}/current
@@ -256,6 +267,11 @@ while [ $# -gt 0 ]; do
     -v|--ver)
       PKG_VER=$2
       shift
+      ;;
+    -s|--src)
+      if [ "DO_ADD" == "y" ]; then
+          DO_ADD_SRC=y
+      fi
       ;;
     -h|--help)
       usage
