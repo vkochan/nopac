@@ -38,14 +38,18 @@ usage() {
     echo "-v,--ver VERSION      Specify the package version"
     echo "-f,--force            Enforce the operation"
     echo "-u, --user            Perform operations on user's local sysroot"
-    echo "-s, --src             Add package sources"
+    echo "-s, --src             Add package source files"
+    echo "-d, --dst             Add package destination/distributed files"
     echo "-h,--help             Print help"
     echo
-    echo "Add package with files to the store:"
+    echo "Add package entry in the store:"
     echo "    nopac -A PATH -v VERSION PKGNAME"
     echo
     echo "Add package with sources to the store:"
-    echo "    nopac -A PATH -s -v VERSION PKGNAME"
+    echo "    nopac -A -s PATH -v VERSION PKGNAME"
+    echo
+    echo "Add package with dist files to the store:"
+    echo "    nopac -A -d PATH -v VERSION PKGNAME"
     echo
     echo "Install package of current version to the system from the store:"
     echo "    nopac -S PKGNAME"
@@ -148,13 +152,15 @@ pkg_uninstall() {
 
 # $1 - package name
 # $2 - package ver
-# $3 - package files dir
+# $3 - dist/dst package files dir
+# $4 - source package files dir
 do_add() {
     local pkg=$1
     local ver=$2
-    local dir=$3
-    local root=$PKGS_DIR/${pkg}/${ver}/sysroot
-    local src=$PKGS_DIR/${pkg}/${ver}/source
+    local dst=$3
+    local src=$4
+    local pkg_root=$PKGS_DIR/${pkg}/${ver}/sysroot
+    local pkg_src=$PKGS_DIR/${pkg}/${ver}/source
 
     if [ -z "${pkg}" ]; then
         error "package name was not specified"
@@ -162,19 +168,18 @@ do_add() {
     if [ -z "${ver}" ]; then
         error "package version was not specified"
     fi
-    if [ ! -d "${dir}" ]; then
-        error "package's dir [${dir}] does not exist"
-    fi
+
+    mkdir -p $PKGS_DIR/${pkg}/${ver}
 
     echo "Adding $pkg $ver ..."
 
-    mkdir -p $root
-
-    if [ "DO_ADD_SRC" == "y" ]; then
-        mkdir -p $src
-        rsync -av -delete ${dir}/* ${src}
-    else
-        rsync -av -delete ${dir}/* ${root}
+    if [ -d "${SRC_PATH}" ]; then
+        mkdir -p $pkg_src
+        rsync -av -delete ${src}/* ${pkg_src}
+    fi
+    if [ -d "${DST_PATH}" ]; then
+        mkdir -p $pkg_root
+        rsync -av -delete ${dst}/* ${pkg_root}
     fi
 
     if [ ! -e $PKGS_DIR/${pkg}/current ]; then
@@ -246,8 +251,6 @@ while [ $# -gt 0 ]; do
   case "$1" in
     -A|--add)
       DO_ADD=y
-      ADD_PATH=$2
-      shift
       ;;
     -S|--install)
       DO_INSTALL=y
@@ -268,9 +271,16 @@ while [ $# -gt 0 ]; do
       PKG_VER=$2
       shift
       ;;
+    -d|--dst)
+      if [ "${DO_ADD}" == "y" ]; then
+          DST_PATH=$2
+          shift;
+      fi
+      ;;
     -s|--src)
-      if [ "DO_ADD" == "y" ]; then
-          DO_ADD_SRC=y
+      if [ "${DO_ADD}" == "y" ]; then
+          SRC_PATH=$2
+          shift;
       fi
       ;;
     -h|--help)
@@ -286,7 +296,7 @@ done
 do_prepare
 
 if [ "${DO_ADD}" == "y" ]; then
-    if do_add "${PKG_NAME}" "${PKG_VER}" "${ADD_PATH}"; then
+    if do_add "${PKG_NAME}" "${PKG_VER}" "${DST_PATH}" "${SRC_PATH}"; then
         exit 1
     fi
 elif [ "${DO_INSTALL}" == "y" ]; then
