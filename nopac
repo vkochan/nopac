@@ -34,7 +34,7 @@ usage() {
     echo "-A,--add PATH         Copy package's files to store dir"
     echo "-S,--install          Install/sync package to the system root"
     echo "-R,--uninstall        Uninstall package from the system root"
-    echo "-Q,--query            Query packages info"
+    echo "-Q,--query            Query packages info (default: show the installed packages)"
     echo "-v,--ver VERSION      Specify the package version"
     echo "-f,--force            Enforce the operation"
     echo "-u, --user            Perform operations on user's local sysroot"
