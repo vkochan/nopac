@@ -40,6 +40,7 @@ usage() {
     echo "-u, --user            Perform operations on user's local sysroot"
     echo "-s, --src             Add package source files"
     echo "-d, --dst             Add package destination/distributed files"
+    echo "-l, --links           Show installed links to the package's files"
     echo "-h,--help             Print help"
     echo
     echo "Add package entry in the store:"
@@ -61,6 +62,8 @@ usage() {
     echo
     echo "Query installed packages:"
     echo "    nopac -Q"
+    echo "Show installed files (links) which points to the package's one"
+    echo "    nopac -Q -l PKGNAME"
 }
 
 do_prepare() {
@@ -232,14 +235,33 @@ do_uninstall() {
     rm -f $PKGS_DIR/${pkg}/current/.nopac/installed
 }
 
+# $1 - package name
 do_query() {
-    for pkg_dir in "$PKGS_DIR"/*; do
-        if [ -f $pkg_dir/current/.nopac/installed ]; then
-            local ver=$(basename $(readlink -f $pkg_dir/current))
-            local pkg=$(basename $pkg_dir)
-            echo "$pkg  $ver"
+    local pkg=$1
+
+    if [ ! -z "${pkg}" ]; then
+        if [ "${QUERY_LINKS}" == "y" ]; then
+            find ${PKGS_SYSROOT}/etc \
+                 ${PKGS_SYSROOT}/usr \
+                 ${PKGS_SYSROOT}/lib \
+                 ${PKGS_SYSROOT}/lib64 \
+                 ${PKGS_SYSROOT}/boot \
+                 ${PKGS_SYSROOT}/var \
+                 ${PKGS_SYSROOT}/bin \
+                 ${PKGS_SYSROOT}/sbin \
+                 ${PKGS_SYSROOT}/srv \
+                 ${PKGS_SYSROOT}/opt \
+                -lname $PKGS_DIR/${pkg}/current'*' -printf "%p\n" 2> /dev/null
         fi
-    done
+    else
+        for pkg_dir in "$PKGS_DIR"/*; do
+            if [ -f $pkg_dir/current/.nopac/installed ]; then
+                local ver=$(basename $(readlink -f $pkg_dir/current))
+                local pkg=$(basename $pkg_dir)
+                echo "$pkg  $ver"
+            fi
+        done
+    fi
 }
 
 if [ $# -eq 0 ]; then
@@ -281,6 +303,11 @@ while [ $# -gt 0 ]; do
       if [ "${DO_ADD}" == "y" ]; then
           SRC_PATH=$2
           shift;
+      fi
+      ;;
+    -l|--links)
+      if [ "${DO_QUERY}" == "y" ]; then
+          QUERY_LINKS=y
       fi
       ;;
     -h|--help)
