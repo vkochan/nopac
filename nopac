@@ -8,13 +8,13 @@ VERSION="0.0.1"
 #
 # /store/packages/all/{pkg}/
 #                          0.0.1/
-#                               sysroot/
+#                               target/
 #                          0.0.2/
-#                               sysroot/
+#                               target/
 #                          current -> 0.0.2
 #
-# /bin/xxx -> /store/packages/all/xxx/current/sysroot/bin/xxx
-# /lib/libxxx.a -> /store/packages/all/xxx/current/sysroot/lib/libxxx.a
+# /bin/xxx -> /store/packages/all/xxx/current/target/bin/xxx
+# /lib/libxxx.a -> /store/packages/all/xxx/current/target/lib/libxxx.a
 
 PKG_CONFLICTS=""
 PKG_NAME=""
@@ -38,8 +38,8 @@ usage() {
     echo "-v,--ver VERSION      Specify the package version"
     echo "-f,--force            Enforce the operation"
     echo "-u, --user            Perform operations on user's local sysroot"
-    echo "-s, --src             Add package source files"
-    echo "-d, --dst             Add package destination/distributed files"
+    echo "-s, --source          Add package source files"
+    echo "-t, --target          Add package target files"
     echo "-l, --links           Show installed links to the package's files"
     echo "-h,--help             Print help"
     echo
@@ -49,8 +49,8 @@ usage() {
     echo "Add package with sources to the store:"
     echo "    nopac -A -s PATH -v VERSION PKGNAME"
     echo
-    echo "Add package with dist files to the store:"
-    echo "    nopac -A -d PATH -v VERSION PKGNAME"
+    echo "Add package with target files to the store:"
+    echo "    nopac -A -t PATH -v VERSION PKGNAME"
     echo
     echo "Install package of current version to the system from the store:"
     echo "    nopac -S PKGNAME"
@@ -100,10 +100,10 @@ dir_is_empty() {
 # $2 - path to the packages files
 pkg_check_conflicts() {
     local pkg=$1
-    local root=$PKGS_DIR/$pkg/current/sysroot
+    local target=$PKGS_DIR/$pkg/current/target
 
     for i in "$2"/*; do
-        local rel=${i/$root/}
+        local rel=${i/$target/}
         if [ -d "$i" ]; then
             pkg_check_conflicts $pkg $i
 	elif [ -f "$i" ]; then
@@ -118,10 +118,10 @@ pkg_check_conflicts() {
 # $2 - path to the packages files
 pkg_install() {
     local pkg=$1
-    local root=$PKGS_DIR/$pkg/current/sysroot
+    local target=$PKGS_DIR/$pkg/current/target
 
     for i in "$2"/*; do
-        local rel=${i/$root/}
+        local rel=${i/$target/}
         if [ -d "$i" ]; then
             mkdir -pv $PKGS_SYSROOT/$rel
             pkg_install $pkg $i
@@ -135,10 +135,10 @@ pkg_install() {
 # $2 - path to package's files
 pkg_uninstall() {
     local pkg=$1
-    local root=$PKGS_DIR/$pkg/current/sysroot
+    local target=$PKGS_DIR/$pkg/current/target
 
     for i in "$2"/*; do
-        local rel=${i/$root/}
+        local rel=${i/$target/}
 	local del=$PKGS_SYSROOT/$rel
 
         if [ -d "$del" ]; then
@@ -155,15 +155,15 @@ pkg_uninstall() {
 
 # $1 - package name
 # $2 - package ver
-# $3 - dist/dst package files dir
-# $4 - source package files dir
+# $3 - package target files dir (optional)
+# $4 - package source files dir (optional)
 do_add() {
     local pkg=$1
     local ver=$2
-    local dst=$3
-    local src=$4
-    local pkg_root=$PKGS_DIR/${pkg}/${ver}/sysroot
-    local pkg_src=$PKGS_DIR/${pkg}/${ver}/source
+    local target=$3
+    local source=$4
+    local pkg_target=$PKGS_DIR/${pkg}/${ver}/target
+    local pkg_source=$PKGS_DIR/${pkg}/${ver}/source
 
     if [ -z "${pkg}" ]; then
         error "package name was not specified"
@@ -176,13 +176,13 @@ do_add() {
 
     echo "Adding $pkg $ver ..."
 
-    if [ -d "${SRC_PATH}" ]; then
-        mkdir -p $pkg_src
-        rsync -av -delete ${src}/* ${pkg_src}
+    if [ -d "${SOURCE_PATH}" ]; then
+        mkdir -p $pkg_source
+        rsync -av -delete ${source}/* ${pkg_source}
     fi
-    if [ -d "${DST_PATH}" ]; then
-        mkdir -p $pkg_root
-        rsync -av -delete ${dst}/* ${pkg_root}
+    if [ -d "${TARGET_PATH}" ]; then
+        mkdir -p $pkg_target
+        rsync -av -delete ${target}/* ${pkg_target}
     fi
 
     if [ ! -e $PKGS_DIR/${pkg}/current ]; then
@@ -195,7 +195,7 @@ do_add() {
 do_install() {
     local pkg=$1
     local ver=$2
-    local root=$PKGS_DIR/${pkg}/current/sysroot
+    local target=$PKGS_DIR/${pkg}/current/target
 
     if [ -z "${pkg}" ]; then
         error "package name was not specified"
@@ -207,7 +207,7 @@ do_install() {
 
     if [ "${DO_FORCE}" == "n" ]; then
         PKG_CONFLICTS=""
-        pkg_check_conflicts $pkg $root
+        pkg_check_conflicts $pkg $target
 
         if [ ! -z "${PKG_CONFLICTS}" ]; then
             echo -en ${PKG_CONFLICTS}
@@ -216,7 +216,7 @@ do_install() {
         fi
     fi
 
-    pkg_install $pkg $root
+    pkg_install $pkg $target
 
     mkdir -p $PKGS_DIR/${pkg}/current/.nopac
     touch $PKGS_DIR/${pkg}/current/.nopac/installed
@@ -225,13 +225,13 @@ do_install() {
 # $1 - package name
 do_uninstall() {
     local pkg=$1
-    local root=$PKGS_DIR/${pkg}/current/sysroot
+    local target=$PKGS_DIR/${pkg}/current/target
 
     if [ -z "${pkg}" ]; then
         error "package name was not specified"
     fi
 
-    pkg_uninstall $pkg $root
+    pkg_uninstall $pkg $target
     rm -f $PKGS_DIR/${pkg}/current/.nopac/installed
 }
 
@@ -293,15 +293,15 @@ while [ $# -gt 0 ]; do
       PKG_VER=$2
       shift
       ;;
-    -d|--dst)
+    -t|--target)
       if [ "${DO_ADD}" == "y" ]; then
-          DST_PATH=$2
+          TARGET_PATH=$2
           shift;
       fi
       ;;
-    -s|--src)
+    -s|--source)
       if [ "${DO_ADD}" == "y" ]; then
-          SRC_PATH=$2
+          SOURCE_PATH=$2
           shift;
       fi
       ;;
@@ -323,7 +323,7 @@ done
 do_prepare
 
 if [ "${DO_ADD}" == "y" ]; then
-    if do_add "${PKG_NAME}" "${PKG_VER}" "${DST_PATH}" "${SRC_PATH}"; then
+    if do_add "${PKG_NAME}" "${PKG_VER}" "${TARGET_PATH}" "${SOURCE_PATH}"; then
         exit 1
     fi
 elif [ "${DO_INSTALL}" == "y" ]; then
