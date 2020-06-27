@@ -43,7 +43,7 @@ usage() {
     echo "-h,--help             Print help"
     echo
     echo "Add package entry in the store:"
-    echo "    nopac -A PATH -v VERSION PKGNAME"
+    echo "    nopac -A -v VERSION PKGNAME"
     echo
     echo "Add package with sources to the store:"
     echo "    nopac -A -s PATH -v VERSION PKGNAME"
