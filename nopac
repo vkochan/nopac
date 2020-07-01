@@ -251,7 +251,7 @@ do_query() {
                  ${PKGS_SYSROOT}/sbin \
                  ${PKGS_SYSROOT}/srv \
                  ${PKGS_SYSROOT}/opt \
-                -lname $PKGS_DIR/${pkg}/current'*' -printf "%p\n" 2> /dev/null
+                -type l -lname $PKGS_DIR/${pkg}/current'*' -printf "%p\n" 2> /dev/null
         fi
     else
         for pkg_dir in "$PKGS_DIR"/*; do
