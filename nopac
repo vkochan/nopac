@@ -68,7 +68,7 @@ usage() {
 
 do_prepare() {
     local store_dir=/store
-    local root_dir=/
+    local root_dir=""
 
     if [ "${DO_USER}" == "y" ]; then
         store_dir=~/store
@@ -77,7 +77,11 @@ do_prepare() {
 
     PKGS_STORE_DIR=$(readlink -f $store_dir)
     PKGS_DIR=${PKGS_STORE_DIR}/packages/all
-    PKGS_SYSROOT=$(readlink -f $root_dir)
+    PKGS_SYSROOT=${root_dir}
+
+    if [ -n "${PKGS_SYSROOT}" ]; then
+        PKGS_SYSROOT=$(readlink -f $root_dir)
+    fi
 
     mkdir -p ${PKGS_DIR}
 }
